@@ -25,6 +25,7 @@ import {
   type LayoutChangeEvent,
   Pressable,
   ScrollView,
+  type ScrollViewProps,
   type StyleProp,
   StyleSheet,
   Text,
@@ -90,6 +91,12 @@ export type EmojiPickerViewProps = {
    */
   // biome-ignore lint/suspicious/noExplicitAny: FlatList と BottomSheetFlatList は互換プロップを持つが型定義が異なる
   FlatListComponent?: React.ComponentType<FlatListProps<EmojiItem> & any>;
+  /**
+   * カテゴリタブの横スクロールに使う ScrollView コンポーネント。
+   * デフォルトは RN の ScrollView。BottomSheet 内では react-native-gesture-handler の ScrollView を渡すこと。
+   * RN の ScrollView では、横のスワイプをシートのジェスチャーに取られてスクロールしない
+   */
+  CategoryScrollViewComponent?: React.ComponentType<ScrollViewProps>;
   /**
    * Unicode 絵文字を画像で表示する場合の URL。undefined を返すとテキスト (システムフォント) で表示する。
    * Twemoji 形式のファイル名には `emojiToTwemojiKey` が使える。
@@ -252,6 +259,7 @@ export function EmojiPickerView({
   isLoading = false,
   listHeaderPrepend,
   FlatListComponent = FlatList,
+  CategoryScrollViewComponent = ScrollView,
   getEmojiImageUrl,
   ImageComponent = DefaultImage,
   searchPlaceholder = "Search emoji",
@@ -512,8 +520,8 @@ export function EmojiPickerView({
           </View>
         )}
 
-        {/* カテゴリタブ (水平スクロールのため通常の ScrollView で問題なし) */}
-        <ScrollView
+        {/* カテゴリタブ */}
+        <CategoryScrollViewComponent
           horizontal
           showsHorizontalScrollIndicator={false}
           style={styles.categoryBar}
@@ -536,7 +544,7 @@ export function EmojiPickerView({
               onPress={() => selectCategory(category.id)}
             />
           ))}
-        </ScrollView>
+        </CategoryScrollViewComponent>
 
         <View style={[styles.divider, { backgroundColor: dividerColor }]} />
       </View>

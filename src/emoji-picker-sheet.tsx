@@ -5,6 +5,7 @@ import {
   BottomSheetModal,
 } from "@gorhom/bottom-sheet";
 import { forwardRef, useCallback, useImperativeHandle, useRef } from "react";
+import { ScrollView } from "react-native-gesture-handler";
 import { StyleSheet, Text, View, useColorScheme } from "react-native";
 import { EmojiPickerView, type EmojiPickerViewProps } from "./emoji-picker-view";
 import type { EmojiItem } from "./types";
@@ -14,7 +15,10 @@ export type EmojiPickerSheetRef = {
   close: () => void;
 };
 
-export type EmojiPickerSheetProps = Omit<EmojiPickerViewProps, "FlatListComponent" | "listHeaderPrepend"> & {
+export type EmojiPickerSheetProps = Omit<
+  EmojiPickerViewProps,
+  "FlatListComponent" | "CategoryScrollViewComponent" | "listHeaderPrepend"
+> & {
   /** シート上部に表示するタイトル */
   title?: string;
   /** 既定は ["75%"] */
@@ -81,6 +85,7 @@ export const EmojiPickerSheet = forwardRef<EmojiPickerSheetRef, EmojiPickerSheet
         onEmojiSelected={handleEmojiSelected}
         listHeaderPrepend={listHeaderPrepend}
         FlatListComponent={BottomSheetFlatList}
+        CategoryScrollViewComponent={ScrollView}
       />
     </BottomSheetModal>
   );

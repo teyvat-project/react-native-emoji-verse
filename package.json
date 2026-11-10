@@ -64,10 +64,14 @@
     "@gorhom/bottom-sheet": ">=5",
     "lucide-react-native": ">=1",
     "react": ">=18",
-    "react-native": ">=0.73"
+    "react-native": ">=0.73",
+    "react-native-gesture-handler": ">=2"
   },
   "peerDependenciesMeta": {
     "@gorhom/bottom-sheet": {
+      "optional": true
+    },
+    "react-native-gesture-handler": {
       "optional": true
     }
   },

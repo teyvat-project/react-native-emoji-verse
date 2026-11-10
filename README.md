@@ -139,6 +139,7 @@ To open the picker on the same search again, keep the text from `onProviderQuery
 | `isLoading` | `false` | Shows a spinner in place of the grid. |
 | `listHeaderPrepend` | | Content placed above the search bar, such as a title. |
 | `FlatListComponent` | `FlatList` | Pass `BottomSheetFlatList` when you render the view inside a bottom sheet yourself. |
+| `CategoryScrollViewComponent` | RN `ScrollView` | Scroll view for the category tabs. Pass `ScrollView` from `react-native-gesture-handler` when you render the view inside a bottom sheet yourself. With the React Native `ScrollView`, the sheet takes horizontal swipes, and the tabs do not scroll. |
 | `getEmojiImageUrl` | | Returns an image URL for a Unicode emoji, for example a Twemoji set. `emojiToTwemojiKey` builds Twemoji file names. If it returns `undefined`, the emoji is drawn as text. |
 | `ImageComponent` | RN `Image` | Component that draws images, for example a wrapper around `expo-image`. |
 | `searchPlaceholder` | `"Search emoji"` | |
