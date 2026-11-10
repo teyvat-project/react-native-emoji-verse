@@ -3,10 +3,13 @@ import {
   type BottomSheetBackdropProps,
   BottomSheetFlatList,
   BottomSheetModal,
+  type ScrollEventsHandlersHookType,
+  useBottomSheetInternal,
+  useScrollEventsHandlersDefault,
 } from "@gorhom/bottom-sheet";
 import { forwardRef, useCallback, useImperativeHandle, useRef } from "react";
 import { ScrollView } from "react-native-gesture-handler";
-import { StyleSheet, Text, View, useColorScheme } from "react-native";
+import { type FlatListProps, type NativeScrollEvent, StyleSheet, Text, View, useColorScheme } from "react-native";
 import { EmojiPickerView, type EmojiPickerViewProps } from "./emoji-picker-view";
 import type { EmojiItem } from "./types";
 
@@ -25,6 +28,30 @@ export type EmojiPickerSheetProps = Omit<
   snapPoints?: (string | number)[];
   onDismiss?: () => void;
 };
+
+// @gorhom/bottom-sheet は、グリッドのスクロール位置をドラッグの始めと終わりにしか覚え直さない。
+// 一覧が短くなったり、キーボードが閉じて表示する領域が広がったりして位置が詰められても、覚えている位置が 0 に戻らず、
+// シートを下に引いても閉じなくなる。スクロールのイベントが来るたびに覚え直す
+const useScrollEventsHandlers: ScrollEventsHandlersHookType = (scrollableRef, scrollableContentOffsetY) => {
+  const handlers = useScrollEventsHandlersDefault(scrollableRef, scrollableContentOffsetY);
+  const { animatedScrollableState } = useBottomSheetInternal();
+  const { handleOnScroll: handleOnScrollDefault } = handlers;
+  const handleOnScroll = useCallback(
+    (payload: NativeScrollEvent, context: never) => {
+      "worklet";
+      handleOnScrollDefault?.(payload, context);
+      const y = payload.contentOffset.y;
+      scrollableContentOffsetY.value = y;
+      animatedScrollableState.set((state) => ({ ...state, contentOffsetY: y }));
+    },
+    [animatedScrollableState, handleOnScrollDefault, scrollableContentOffsetY],
+  );
+  return { ...handlers, handleOnScroll };
+};
+
+function SheetFlatList(props: FlatListProps<EmojiItem>) {
+  return <BottomSheetFlatList {...props} scrollEventsHandlersHook={useScrollEventsHandlers} />;
+}
 
 /**
  * @gorhom/bottom-sheet の BottomSheetModal で EmojiPickerView を表示する。
@@ -84,7 +111,7 @@ export const EmojiPickerSheet = forwardRef<EmojiPickerSheetRef, EmojiPickerSheet
         {...props}
         onEmojiSelected={handleEmojiSelected}
         listHeaderPrepend={listHeaderPrepend}
-        FlatListComponent={BottomSheetFlatList}
+        FlatListComponent={SheetFlatList}
         CategoryScrollViewComponent={ScrollView}
       />
     </BottomSheetModal>
