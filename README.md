@@ -101,7 +101,7 @@ The built-in icon names are `clock`, `smile`, `paw-print`, `utensils`, `trophy`,
 
 ## Search provider
 
-To search outside the picker, for example by meaning on your server, pass a `searchProvider`. It adds a tab before the categories. While the tab is selected, the search bar text goes to `search` after the user stops typing. To search only when the user presses the search key on the keyboard or closes the keyboard, set `searchOn: "submit"`. This avoids searching with text that an input method has not converted yet, such as Japanese kana. Add `submitLabel` to show a button that searches the typed text, in place of the results, until the user submits it.
+To search outside the picker, for example by meaning on your server, pass a `searchProvider`. It adds a tab before the categories. While the tab is selected, the picker calls `search` with the search bar text when the user submits it: when the user presses the search key on the keyboard, or hides the keyboard while the search bar keeps focus, as with the Android back button. The picker does not search while the user types, so it does not send a request for each keystroke or for text that an input method is still converting, such as Japanese kana. Add `submitLabel` to show a button that searches the typed text, in place of the results, until the user submits it.
 
 ```tsx
 const provider = useMemo<EmojiSearchProvider>(
@@ -112,6 +112,7 @@ const provider = useMemo<EmojiSearchProvider>(
     emptyMessage: "No emoji found.",
     errorMessage: "Search failed. Try again later.",
     tryLabel: "Search by meaning", // shown when the regular search finds nothing
+    submitLabel: (query) => `Search for "${query}"`,
     search: async (query, { signal }) => {
       const res = await fetch(`https://example.com/search?q=${encodeURIComponent(query)}`, { signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -124,11 +125,11 @@ const provider = useMemo<EmojiSearchProvider>(
 <EmojiPickerView categories={categories} onEmojiSelected={onSelect} searchProvider={provider} />;
 ```
 
-`search` returns `{ items, message? }`. When `items` is empty, the picker shows `message` (or `emptyMessage`) in place of the grid. Otherwise, it shows `message` as a note above the grid. If `search` rejects, the picker shows `errorMessage`. Changing the text aborts the previous `signal`, and the picker ignores results that arrive after that. Memoize the provider, because a new object starts the search again.
+`search` returns `{ items, message? }`. When `items` is empty, the picker shows `message` (or `emptyMessage`) in place of the grid. Otherwise, it shows `message` as a note above the grid. If `search` rejects or throws, the picker shows `errorMessage`. Submitting other text, moving to another tab, or closing the picker aborts the previous `signal`, and the picker ignores results that arrive after that. Memoize the provider, because a new object starts the search again.
 
-To show earlier results without waiting, add `peek`. It returns a stored result for a query, or `undefined`. When it returns a result, the picker shows it at once and does not call `search`.
+To show earlier results without waiting, add `peek`. It returns a stored result for a query, or `undefined`. When it returns a result, the picker shows it at once and does not call `search`. The picker calls `peek` on every render, so keep it fast and return the same object for the same query.
 
-To open the picker on the same search again, keep the text from `onProviderQueryChange` and pass it back as `defaultProviderQuery`. The picker then opens on the provider tab with that text. `onProviderQueryChange` reports the text without surrounding spaces, and reports an empty string when the user moves to another tab.
+To open the picker on the same search again, keep the text from `onProviderQueryChange` and pass it back as `defaultProviderQuery`. The picker then opens on the provider tab with that text. `onProviderQueryChange` reports the submitted text without surrounding spaces when it changes, and reports an empty string when the user moves to another tab. It is not called when the picker opens.
 
 ## EmojiPickerView props
 
@@ -146,7 +147,7 @@ To open the picker on the same search again, keep the text from `onProviderQuery
 | `skinTone` / `defaultSkinTone` / `onSkinToneChange` | `0` | The skin tone, as a controlled or uncontrolled value. `0` means no tone (yellow) and `1`–`5` map to Fitzpatrick types 1-2 to 6. |
 | `showSkinToneSelector` | auto | Shows the skin tone button in the search bar. By default, the button appears only when some emoji in `categories` has skin tone variants. |
 | `searchProvider` | | Adds a tab that searches with your own function. See [Search provider](#search-provider). |
-| `defaultProviderQuery` / `onProviderQueryChange` | | Opens the picker on the provider tab with this text, and reports the text searched on that tab. See [Search provider](#search-provider). |
+| `defaultProviderQuery` / `onProviderQueryChange` | | Opens the picker on the provider tab with this text, and reports the text submitted on that tab. See [Search provider](#search-provider). |
 
 The picker does not store the skin tone. To keep it between launches, persist the value from `onSkinToneChange`.
 

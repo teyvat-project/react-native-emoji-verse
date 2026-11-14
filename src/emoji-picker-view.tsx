@@ -118,7 +118,7 @@ export type EmojiPickerViewProps = {
   searchProvider?: EmojiSearchProvider;
   /** 開いたときに検索プロバイダのタブを選び、検索欄にこの文字を入れておく (uncontrolled) */
   defaultProviderQuery?: string;
-  /** 検索プロバイダのタブで探している文字 (前後の空白を除く) が変わったとき。ほかのタブに移ったときは空文字 */
+  /** 検索プロバイダのタブで確定した文字 (前後の空白を除く) が変わったとき。ほかのタブに移ったときは空文字。開いたときは呼ばない */
   onProviderQueryChange?: (query: string) => void;
 };
 
@@ -174,13 +174,12 @@ type ProviderSearchState =
   | { type: "failed" }
   | { type: "ok"; result: EmojiSearchResult };
 
-// delayMs だけ入力が止まってから検索し、入力が変わったら前の検索を中断する。
+// 確定した文字で検索し、文字が変わったら前の検索を中断する。
 // attempt が変わったときは、同じ文字でも探し直す (失敗した後に同じ文字で確定し直したときなど)
 function useProviderSearch(
   provider: EmojiSearchProvider | undefined,
   text: string,
   enabled: boolean,
-  delayMs: number,
   attempt: number,
 ): ProviderSearchState {
   const query = text.trim();
@@ -197,34 +196,48 @@ function useProviderSearch(
     if (!active || !provider) return;
     // 覚えている結果があれば探さず、その結果を残しておく。あとで peek が undefined を返すようになっても (覚えておく期限が切れたときなど)、
     // 検索する文字が変わるまでは、関係のない再描画をきっかけに探し直さない
-    const hit = provider.peek?.(query);
+    const hit = peekSafely(provider, query);
     if (hit) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSettled({ provider, query, attempt, state: { type: "ok", result: hit } });
       return;
     }
     const controller = new AbortController();
-    const timer = setTimeout(() => {
-      provider
-        .search(query, { signal: controller.signal })
-        .then((result) => {
-          if (!controller.signal.aborted) setSettled({ provider, query, attempt, state: { type: "ok", result } });
-        })
-        .catch(() => {
-          if (!controller.signal.aborted) setSettled({ provider, query, attempt, state: { type: "failed" } });
-        });
-    }, delayMs);
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [active, attempt, delayMs, provider, query]);
+    // search が Promise を返す前に同期的に throw しても、失敗として扱う
+    Promise.resolve()
+      // 呼ぶ前に中断されていたら (StrictMode で effect がすぐに作り直されたときなど) 呼ばない
+      .then(() => (controller.signal.aborted ? undefined : provider.search(query, { signal: controller.signal })))
+      .then((result) => {
+        if (controller.signal.aborted) return;
+        // 結果の形が崩れているとき (結果を返さずに resolve したときなど) も、読み込み中のままにしたり描画で落ちたりせず、失敗として扱う
+        if (!isSearchResult(result)) throw new Error("search resolved without a valid result");
+        setSettled({ provider, query, attempt, state: { type: "ok", result } });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setSettled({ provider, query, attempt, state: { type: "failed" } });
+      });
+    return () => controller.abort();
+  }, [active, attempt, provider, query]);
 
   if (!active) return { type: "idle" };
   if (settled?.provider === provider && settled.query === query && settled.attempt === attempt) return settled.state;
   // effect で結果を残す前の描画では、覚えている結果があれば待たずに出す
-  const cached = provider.peek?.(query);
+  const cached = peekSafely(provider, query);
   return cached ? { type: "ok", result: cached } : { type: "loading" };
+}
+
+function isSearchResult(result: unknown): result is EmojiSearchResult {
+  return typeof result === "object" && result !== null && Array.isArray((result as EmojiSearchResult).items);
+}
+
+// peek は利用側の関数なので、throw したり形の崩れた結果を返したりしても描画を止めず、覚えていないものとして扱う
+function peekSafely(provider: EmojiSearchProvider | undefined, query: string) {
+  try {
+    const result = provider?.peek?.(query);
+    return isSearchResult(result) ? result : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 // 開いたときは、絵文字のある最初のカテゴリを選ぶ (先頭の「最近使用」などが空のことがある)
@@ -283,7 +296,7 @@ export function EmojiPickerView({
   const restoresProviderQuery = searchProvider !== undefined && !!defaultProviderQuery;
   const [isProviderSelected, setIsProviderSelected] = useState(restoresProviderQuery);
   const [searchText, setSearchText] = useState(restoresProviderQuery ? defaultProviderQuery : "");
-  // searchOn: "submit" のとき、検索プロバイダで探す文字。確定するまで searchText とは別に持つ
+  // 検索プロバイダで探す文字。確定するまで searchText とは別に持つ
   const [submittedText, setSubmittedText] = useState(restoresProviderQuery ? defaultProviderQuery : "");
   const [submitCount, setSubmitCount] = useState(0);
   const [innerSkinTone, setInnerSkinTone] = useState<SkinTone>(defaultSkinTone);
@@ -309,20 +322,25 @@ export function EmojiPickerView({
   const isProviderActive = isProviderSelected && searchProvider !== undefined;
   // 検索プロバイダのタブでは、検索欄の文字はプロバイダの検索に使う
   const isSearching = !isProviderActive && searchText.trim().length > 0;
-  const searchesOnSubmit = searchProvider?.searchOn === "submit";
-  const providerText = searchesOnSubmit ? submittedText : searchText;
   const providerState = useProviderSearch(
     searchProvider,
-    providerText,
+    submittedText,
     // カテゴリを読み込んでいる間は探さない。カテゴリが届くと provider が作り直され、探し直しになるため
     isProviderActive && !isLoading,
-    searchesOnSubmit ? 0 : (searchProvider?.debounceMs ?? 300),
     submitCount,
   );
-  const providerQuery = isProviderActive ? providerText.trim() : "";
+  const providerQuery = isProviderActive ? submittedText.trim() : "";
+  // 利用側がメモ化していない関数を渡しても、描画のたびに呼ばないよう、最新の関数を ref で持ち、値が変わったときだけ呼ぶ
+  const onProviderQueryChangeRef = useRef(onProviderQueryChange);
   useEffect(() => {
-    onProviderQueryChange?.(providerQuery);
-  }, [onProviderQueryChange, providerQuery]);
+    onProviderQueryChangeRef.current = onProviderQueryChange;
+  });
+  const reportedProviderQuery = useRef(providerQuery);
+  useEffect(() => {
+    if (reportedProviderQuery.current === providerQuery) return;
+    reportedProviderQuery.current = providerQuery;
+    onProviderQueryChangeRef.current?.(providerQuery);
+  }, [providerQuery]);
 
   const handleSearchTextChange = useCallback((text: string) => {
     setSearchText(text);
@@ -371,10 +389,10 @@ export function EmojiPickerView({
 
   // Android の戻るボタンなどでは、フォーカスが残ったままキーボードだけ閉じるので、キーボードが閉じたことで確定する
   useEffect(() => {
-    if (!isProviderActive || !searchesOnSubmit) return;
+    if (!isProviderActive) return;
     const subscription = Keyboard.addListener("keyboardDidHide", submitPendingText);
     return () => subscription.remove();
-  }, [isProviderActive, searchesOnSubmit, submitPendingText]);
+  }, [isProviderActive, submitPendingText]);
 
   const searchResults = useMemo(() => {
     if (!isSearching) return [];
@@ -459,12 +477,10 @@ export function EmojiPickerView({
           ? (providerResult.message ?? searchProvider?.emptyMessage)
           : undefined;
   const tryLabel = isSearching && searchResults.length === 0 ? searchProvider?.tryLabel : undefined;
-  // searchOn: "submit" で、入力した文字をまだ確定していないときに出す、その文字で探すボタンの文言
+  // 入力した文字をまだ確定していないときに出す、その文字で探すボタンの文言
   const pendingText = searchText.trim();
   const submitLabel =
-    isProviderActive && searchesOnSubmit && pendingText !== "" && pendingText !== submittedText.trim()
-      ? searchProvider?.submitLabel?.(pendingText)
-      : undefined;
+    isProviderActive && pendingText !== "" && !isSubmitted ? searchProvider?.submitLabel?.(pendingText) : undefined;
 
   const bgColor = theme === "dark" ? "#1C1C1E" : "#FFFFFF";
   const panelColor = theme === "dark" ? "#2C2C2E" : "#F2F2F7";
@@ -525,7 +541,7 @@ export function EmojiPickerView({
             value={searchText}
             onChangeText={handleSearchTextChange}
             onSubmitEditing={isProviderActive ? submitSearchText : undefined}
-            returnKeyType={isProviderActive && searchesOnSubmit ? "search" : undefined}
+            returnKeyType={isProviderActive ? "search" : undefined}
             autoCapitalize="none"
             autoCorrect={false}
           />

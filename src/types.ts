@@ -66,18 +66,18 @@ export type EmojiSearchProvider = {
   errorMessage?: string;
   /** 通常の検索で見つからなかったときに表示する、このタブへ切り替えるボタンの文言。省略するとボタンを表示しない */
   tryLabel?: string;
-  /**
-   * いつ search を呼ぶか。既定は "change"
-   * - "change": 入力が止まってから debounceMs 後
-   * - "submit": キーボードの検索キーを押したときと、キーボードを閉じたとき。かな漢字変換の途中の文字で探さない
-   */
-  searchOn?: "change" | "submit";
-  /** searchOn が "submit" のとき、入力をまだ確定していなければ、結果の代わりにその文字で探すボタンを出す。その文言 */
+  /** 入力をまだ確定していないとき、結果の代わりに出す、その文字で探すボタンの文言 */
   submitLabel?: (query: string) => string;
-  /** searchOn が "change" のとき、入力が止まってから search を呼ぶまでの時間 (ms)。既定は 300 */
-  debounceMs?: number;
-  /** 入力が変わると signal を中断する。中断による reject は無視される */
+  /**
+   * 入力を確定したとき (キーボードの検索キー、submitLabel のボタン、検索欄にフォーカスが残ったままキーボードを閉じたとき) に呼ぶ。
+   * 打っている途中では呼ばない。
+   * 別の文字で探したとき、ほかのタブに移ったとき、ピッカーを閉じたときは signal を中断し、その後に届いた結果は捨てる。
+   * reject したとき (同期的に throw したときも) は errorMessage を表示する
+   */
   search: (query: string, options: { signal: AbortSignal }) => Promise<EmojiSearchResult>;
-  /** 前に探した結果を覚えていれば返す。返したときは search を呼ばず、待たずに表示する */
+  /**
+   * 前に探した結果を覚えていれば返す。返したときは search を呼ばず、待たずに表示する。
+   * 描画のたびに呼ぶので、軽くし、同じ query には同じオブジェクトを返すこと。throw したときは覚えていないものとして扱う
+   */
   peek?: (query: string) => EmojiSearchResult | undefined;
 };
