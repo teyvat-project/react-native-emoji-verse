@@ -1,6 +1,6 @@
 {
   "name": "@natsuneko-laboratory/react-native-emoji-verse",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Emoji picker for React Native with per-Unicode-version emoji data and skin tone support.",
   "license": "MIT",
   "author": "Kanon Mochizuki <me@natsuneko.cat> (https://github.com/mika-f)",
